@@ -63,6 +63,8 @@ class Enrollement_View(APIView):
         if user.role == User.TENANT_USER:
             if enrollements.user != user:
                 return Response({"details":"Tenant User cant assign course to others"},status=400)
+            if course.course_type == Course_db.PAID:
+                return Response({"details":"Tenant user should pay to access this course"},status=403)
             enrolled = True
         else:
             enrolled = False

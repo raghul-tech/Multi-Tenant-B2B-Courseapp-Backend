@@ -4,6 +4,9 @@ from accounts.models import User
 
 # Create your models here.
 class Course_db(models.Model):
+      FREE = "FREE"
+      PAID = "PAID"
+       
       COURSE_CHOICES =[
            ('FREE','free'),
             ('PAID','paid'),

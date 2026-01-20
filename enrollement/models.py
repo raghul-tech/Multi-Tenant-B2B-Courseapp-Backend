@@ -5,9 +5,9 @@ from course.models import Course_db
 # Create your models here.
 class Enrollement(models.Model):
 
-    ENROLLED = 'Enrolled'
-    COMPLETED='Completed'
-    ASSIGNED= 'Assigned'
+    ENROLLED = 'ENROLLED'
+    COMPLETED='COMPLETED'
+    ASSIGNED= 'ASSIGNED'
      
     user = models.ForeignKey(
         User,

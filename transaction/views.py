@@ -50,91 +50,14 @@ class Transaction_Initialize(APIView):
 class Transaction_Verify(APIView):
     permission_classes = [IsAuthenticated]
     def post (self,request):
-        user = request.user
-        if user.role != UserRole.TENANT_USER:
-            return Response({"details":"tenant user can only pay"},status=403)
-        
-        payment = request.data.get("payment_id")
-        success = request.data.get("success")
-
-        if not payment or not success:
-            return Response({"details":"payment id  and success is required"},status=403)
-        try:
-            transaction =   Transactions.objects.get(
-            id = payment,
-            user = user,
-            tenant = user.tenant
-        )     
-        except Transactions.DoesNotExist:
-            return Response({"details","transaction  not found"},status=403)
-        
-        if transaction.status != Transactions.PENDING:
-            return Response({"details","Transaction is already completed"},status=400)
-        
-        if success:
-            transaction.status = Transactions.SUCCESS
-            transaction.payment_mode = "online"
-            transaction.save()
-
-            Enrollement.objects.get_or_create(
-                user = user ,
-                course = transaction.course,
-              defaults={
-                "status" : Enrollement.ASSIGNED,
-                "self_enrolled" : True
-              }
-            )
-            return Response({"details":"Payments successful"},status = 200)
-        
-        transaction.status = Transactions.FAILED
-        transaction.save()
-        return Response({"details":"Payments Failed"},status=400)
-
+        verify = help_transaction()
+        return verify.transaction(request)
     
 class Transaction_Retry(APIView):
     permission_classes = [IsAuthenticated]
     def put(self,request):
-        user = request.user
-        if user.role != UserRole.TENANT_USER:
-            return Response({"details":"Tenant user can retry payment "},status=400)
-        
-        payment_id = request.data.get("payment_id")
-        success = request.data.get("success")
-
-        if not payment_id or not success:
-            return Response({"details":"payment id or success is required "},status=400)
-        try:
-            transaction = Transactions.objects.get(
-                user = user,
-                tenant = user.tenant,
-                id = payment_id
-            )
-        except Transactions.DoesNotExist:
-            return Response({"details":"transaction details not found"},status=400)
-        
-        if transaction.status == Transactions.SUCCESS:
-            return Response({"details":"Transaction is already completed"},status=200)
-        
-        if success:
-            transaction.status = Transactions.SUCCESS
-            transaction.payment_mode = "online"
-            transaction.save()
-            Enrollement.objects.get_or_create(
-                user = user,
-              course = transaction.course,
-              defaults={
-                  "status": Enrollement.ASSIGNED,
-                  "self_enrolled": True
-              }
-            )
-            return Response({"Payment is successful"},status=200)
-        
-        transaction.status = Transactions.FAILED
-        transaction.save()
-        return Response({"details":"Payment failed again"},status=400)
-
-
-
+       retry = help_transaction()
+       return retry.transaction(request)
 
 class Transaction_View(APIView):
     permission_classes = [IsAuthenticated]
@@ -152,4 +75,45 @@ class Transaction_View(APIView):
         
         serializer = TransactionSerializers(data,many=True)
         return Response(serializer.data,status=200)
-        
+    
+class help_transaction():
+        def transaction(self, request):
+            user = request.user
+            if user.role != UserRole.TENANT_USER:
+                return Response({"details":"tenent user can only pay"},status=403)
+            payment = request.data.get("payment_id")
+            success = request.data.get("success")
+
+            if payment is None or success is None:
+                return Response({"details":"payment id and success status is required"},status=403)
+            try:
+                transaction = Transactions.objects.get(
+                    id = payment,
+                    user = user,
+                    tenant = user.tenant
+                )
+            except Transactions.DoesNotExist:
+                return Response({"details":"no transaction data found"},status=403)
+            
+            if transaction.status ==Transactions.SUCCESS:
+                return Response({"details":"Transaction is already complete"},status=200)
+            
+            if success:
+                transaction.status =Transactions.SUCCESS
+                transaction.payment_mode = "online"
+                transaction.save()
+
+                Enrollement.objects.get_or_create(
+                    user = user,
+                    course = transaction.course,
+                    assigned_by = user,
+                    defaults={
+                        "status":Enrollement.ASSIGNED,
+                        "self_enrolled":True
+                    }
+                )
+                return Response({"details":"Payment is successful and the course is enrolled"},status=200)
+
+            transaction.status = Transactions.FAILED
+            transaction.save()
+            return Response({"details":"Paymemt failed "},status=403)
