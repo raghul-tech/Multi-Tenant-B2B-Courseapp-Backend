@@ -106,27 +106,6 @@ class Course_Details(APIView):
         course_serializer = Course_Details_Serializer(course,many=True)
         return Response(course_serializer.data,status=200)
     
-class Course_Choose(APIView):
-    permission_classes = [IsAuthenticated]
-    def get(self,request,skill):
-        user = request.user
-        if user.role == User.SUPER_ADMIN:
-            course = Course_db.objects.filter(
-                status = "PUBLISHED",
-                skills__icontains = skill
-            )
-        elif user.role == User.TENANT_ADMIN or user.role == User.TENANT_USER:
-            course = Course_db.objects.filter(
-                tenant = user.tenant,
-                status = "PUBLISHED",
-                skills__icontains = skill
-            )
-        else:
-            return Response({"details":"Access Denied"},status=403)
-        serializer = CourseSerializer(course,many=True)
-        return Response(serializer.data,status=200)
-
-
         
 
 

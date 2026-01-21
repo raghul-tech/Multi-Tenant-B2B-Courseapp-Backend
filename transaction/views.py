@@ -14,6 +14,7 @@ from .serializers import TransactionSerializers
 class Transaction_Initialize(APIView):
     permission_classes = [IsAuthenticated]
     def post(self, request):
+     
         user = request.user
         if user.role != UserRole.TENANT_USER:
             return Response({"details":"tenant user can only pay"},status=403)
@@ -72,7 +73,7 @@ class Transaction_View(APIView):
             data = Transactions.objects.filter(user = user)
         else:
             return Response({"details":"Not Authorized"},status=400)
-        
+    
         serializer = TransactionSerializers(data,many=True)
         return Response(serializer.data,status=200)
     

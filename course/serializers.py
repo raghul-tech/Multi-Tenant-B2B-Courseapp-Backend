@@ -9,7 +9,6 @@ class CourseSerializer(serializers.ModelSerializer):
             'id',
             'title',
             'description',
-            'skills',
             'created_at',
             'updated_at',
             'course_type',

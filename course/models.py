@@ -35,7 +35,6 @@ class Course_db(models.Model):
         blank=True)
       created_at = models.DateTimeField(auto_now_add=True)
       updated_at = models.DateTimeField(auto_now=True)
-      skills = models.CharField(max_length=100, default = "IT")
 
       def __str__(self):
           return self.title

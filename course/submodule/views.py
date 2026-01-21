@@ -67,6 +67,8 @@ class SubModule_Edit(APIView):
         user = request.user
         if user.role != User.TENANT_ADMIN:
             return Response({"details":"tenant admin required to create submodule"},status=403)
+        if(submodule.module.course.tenant != user.tenant):
+                return Response({"details":"dont have access"},status=403)
         
         serializer = SubModuleSerializer(submodule,data=request.data,partial=True)
         if serializer.is_valid():

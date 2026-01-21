@@ -76,8 +76,8 @@ class Enrollement_View(APIView):
                 "assigned_by":user,
                 "self_assigned":enrolled
             }
-
         )
+
         if not created:
             return Response({"details":"Enrollements already exist"},status=200)
         
