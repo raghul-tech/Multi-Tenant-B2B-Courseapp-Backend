@@ -1,7 +1,7 @@
 from django.db import models
 from tenant.models import Tenant
 from accounts.models import User
-from course.models import Course_db
+from course.models import Course_db,Module,SubModule
 
 # Create your models here.
 class Skills(models.Model):
@@ -53,4 +53,3 @@ class UserSkillProgress(models.Model):
         last_updated = models.DateTimeField(auto_now=True)
         class Meta:
              unique_together = ("user","skills")
-

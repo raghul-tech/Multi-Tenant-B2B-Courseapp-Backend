@@ -69,6 +69,7 @@ INSTALLED_APPS = [
     "transaction",
     "catalogues",
     "skills",
+    "courseprogress",
     'rest_framework_simplejwt',
     'rest_framework',
     

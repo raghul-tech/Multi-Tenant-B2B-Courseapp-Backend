@@ -5,7 +5,7 @@ class UserSkillProgress_View_Serializer(serializers.ModelSerializer):
     class Meta:
         model = UserSkillProgress
         fields = '__all__'
-        read_only_fields = fields
+        read_only_fields = [field.name for field in model._meta.fields]
 
 class UserSkillProgress_Create_Serializer(serializers.ModelSerializer):
     class Meta:

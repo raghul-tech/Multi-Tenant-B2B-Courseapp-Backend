@@ -1,9 +1,12 @@
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from core.permission import UserRole,IsTenantUser
-from skills.models import UserSkillProgress
+from skills.models import UserSkillProgress,CourseSkill,Skills
 from .serializers import UserSkillProgress_View_Serializer,UserSkillProgress_Create_Serializer
 from rest_framework.response import Response
+from django.shortcuts import get_object_or_404
+from enrollement.models import Enrollement
+from course.models import Course_db
 
 class UserSkillProgress_View(APIView):
     permission_classes = [IsAuthenticated]
@@ -21,22 +24,25 @@ class UserSkillProgress_View(APIView):
         serializer = UserSkillProgress_View_Serializer(data,many=True)
         return Response(serializer.data,status=200)
     
-class UserSkillProgress_Create(APIView):
-        permission_classes = [IsAuthenticated,IsTenantUser]
-        def post(self,request):
-          serializer = UserSkillProgress_Create_Serializer(
-             request.data,
-             context = {"request":request}
-          )
-          serializer.is_valid(raise_exception=True)
-          serializer.save()
-          return Response(serializer.data,status=201)
+         
+def user_skill_progress(user,course,completed):
 
+    courseskill = CourseSkill.objects.filter(
+        course = course
+    )
+    for cs in courseskill:
+        skill = cs.skills
+        weight = cs.course_weight
 
+    progress = (completed/100)*weight
 
-
-
-
-
-
-    
+    userskill,created = UserSkillProgress.objects.get_or_create(
+        user = user,
+        skills = skill,
+        tenant = user.tenant,
+        defaults={
+            "profeciency":0
+        }
+    )
+    userskill.profeciency += progress
+    userskill.save()

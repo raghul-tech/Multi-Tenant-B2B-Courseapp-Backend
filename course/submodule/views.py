@@ -4,10 +4,10 @@ from rest_framework.permissions import IsAuthenticated
 from accounts.models import User
 from course.models import SubModule,Module
 from .serializers import SubModuleSerializer
-from core.permission import IsTenantAdmin,IsTenantUser
+from core.permission import IsTenantAdmin
 
 class SubModule_View(APIView):
-    permission_classes = [IsAuthenticated,IsTenantUser]
+    permission_classes = [IsAuthenticated]
     def get(self,request):
         user = request.user
 

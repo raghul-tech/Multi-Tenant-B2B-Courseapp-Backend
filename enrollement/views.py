@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from .models import Enrollement
 from core.permission import UserRole as User
 from course.models import Course_db
+from courseprogress.views import initialize_course_progress
 
 # Create your views here.
 class Enrollement_View(APIView):
@@ -77,6 +78,8 @@ class Enrollement_View(APIView):
                 "self_assigned":enrolled
             }
         )
+        initialize_course_progress(enrollements,course)
+ 
 
         if not created:
             return Response({"details":"Enrollements already exist"},status=200)
