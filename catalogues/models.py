@@ -33,11 +33,11 @@ class Catalogues_Courses(models.Model):
         on_delete=models.CASCADE,
         related_name="catalogue_course"
     )
-    orders = models.PositiveIntegerField()
+    order = models.PositiveIntegerField()
 
     class Meta:
         unique_together = ["course","catalogue"]
-        ordering = ["orders"]
+        ordering = ["order"]
 
 
 

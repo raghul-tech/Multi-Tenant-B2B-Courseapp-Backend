@@ -3,43 +3,50 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from accounts.models import User
-from .serializers import CourseSerializer,Course_Details_Serializer
+from .serializers import CourseSerializer,Course_Details_Serializer,CourseCreateSerializer,CourseEditSerializer
 from .models import Course_db
-from core.permission import IsTenantAdmin
+from core.permission import IsTenantAdmin,IsTenantActive
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.generics import GenericAPIView
 
 # Create your views here.
-class Course_View(APIView):
-    permission_classes = [IsAuthenticated]
-    def get(self, request):
-        user = request.user
+class DefaultPagination(PageNumberPagination):
+    page_size = 1
+    page_size_query_param = 'page_size'
+    max_page_size = 50
+
+class Course_View(GenericAPIView):
+    permission_classes = [IsAuthenticated,IsTenantActive]
+    pagination_class = DefaultPagination
+    serializer_class = CourseSerializer
+
+    def get_queryset(self):
+        user = self.request.user
 
         if user.role == User.SUPER_ADMIN:
-            data = Course_db.objects.all()
+            return Course_db.objects.all()
         elif user.role == User.TENANT_ADMIN:
-            data = Course_db.objects.filter(tenant=user.tenant)
+            return Course_db.objects.filter(tenant=user.tenant)
         elif user.role == User.TENANT_USER:
-            data = Course_db.objects.filter(
+            return Course_db.objects.filter(
                 status = "PUBLISHED",
                 enrollements__user = user
             )
-        else:
-            return Response({"detail": "Not allowed"}, status=403)
-        
-        serializer = CourseSerializer(data, many=True)
-        return Response(
-            serializer.data, status=200)
-        
     
-    def post(self, request):
-        user  = request.user
-        
-        if user.role != User.TENANT_ADMIN:
-            return Response({"detail": "Tenant Admin required"}, status=403)
-        
-        serializer = CourseSerializer(data=request.data,context = {request :'request'})
+    def get(self, request):
+        query = self.get_queryset()
+        page = self.paginate_queryset(query)
+        serializer = self.get_serializer(page, many=True)
+        return self.get_paginated_response(serializer.data)
+    
+
+class CourseCreate(APIView):
+    permission_classes = [IsAuthenticated,IsTenantAdmin]
+    def post(self, request):        
+        serializer = CourseCreateSerializer(data=request.data,context = {'request':request})
         serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data, status=201)
+        course=  serializer.save()
+        return Response(CourseSerializer(course).data, status=201)
         
 class Course_Edit(APIView):
     permission_classes = [IsAuthenticated,IsTenantAdmin]
@@ -50,7 +57,7 @@ class Course_Edit(APIView):
         except Course_db.DoesNotExist:
             return Response({"detail": "Course not found"}, status=404)     
             
-        serializer = CourseSerializer(course, data=request.data, partial=True)
+        serializer = CourseEditSerializer(course, data=request.data, partial=True)
         if serializer.is_valid():   
             serializer.save()
             return Response(serializer.data, status=200)
@@ -68,42 +75,56 @@ class Course_Edit(APIView):
         return Response({"details":"course deleted"},status=204)
     
 
-class Course_Details(APIView):
-    permission_classes = [IsAuthenticated]
-    def get(self,request):
-        user = request.user
+class Course_Details(GenericAPIView):
+    permission_classes = [IsAuthenticated,IsTenantActive]
+    pagination_class = DefaultPagination
+    serializer_class = Course_Details_Serializer
 
+    def get_queryset(self,pk):
+        user = self.request.user
         if user.role == User.SUPER_ADMIN:
-            course = Course_db.objects.all()
+            return Course_db.objects.all()
         elif user.role == User.TENANT_ADMIN:
-            course = Course_db.objects.filter(tenant = user.tenant)
+            return Course_db.objects.filter(tenant = user.tenant)
         elif user.role == User.TENANT_USER:
-            course = Course_db.objects.filter(
+            return Course_db.objects.filter(
+                pk = pk,
                 status = "PUBLISHED",
                 enrollements__user = user
             )
-        else:
-            return Response({"details":"Access denied"},status=403)
-        
-        course_serializer = Course_Details_Serializer(course,many=True)
-        return Response(course_serializer.data,status=200)
+
+    def get(self,request,pk):
+        query = self.get_queryset(pk)
+        page = self.paginate_queryset(query)
+        serializer = self.get_serializer(page,many=True)
+        return self.get_paginated_response(serializer.data)
     
-class Course_All(APIView):
-    permission_classes = [IsAuthenticated]
-    def get(self,request):
-        user = request.user
+class Course_All(GenericAPIView):
+    permission_classes = [IsAuthenticated,IsTenantActive]
+    pagination_class = DefaultPagination
+    serializer_class = CourseSerializer
+
+    def get_queryset(self):
+        user = self.request.user
         if user.role == User.SUPER_ADMIN:
-            course = Course_db.objects.all()
+            return Course_db.objects.all()
         elif user.role == User.TENANT_ADMIN:
-            course = Course_db.objects.filter(tenant = user.tenant)
+            return Course_db.objects.filter(tenant = user.tenant)
         else:
-            course = Course_db.objects.filter(
+            return  Course_db.objects.filter(
                 tenant = user.tenant,
                 status = "PUBLISHED"
             )
+
+    def get(self,request):
+        query = self.get_queryset()
+        page = self.paginate_queryset(query)
+        serializer = self.get_serializer(page,many=True)
+        return self.get_paginated_response(serializer.data)
     
-        serializer = Course_Details_Serializer(course,many=True)
-        return Response(serializer.data,status=200)
+        
+
+
     
         
 

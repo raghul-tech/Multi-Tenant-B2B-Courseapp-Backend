@@ -3,7 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated,AllowAny
 from rest_framework.response import Response
 from course.models import Course_db
-from core.permission import UserRole
+from core.permission import UserRole,IsTenantActive
 from enrollement.models import Enrollement
 from .models import Transactions
 from .serializers import TransactionSerializers
@@ -11,6 +11,7 @@ import stripe
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
+from courseprogress.views import initialize_course_progress
 
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -18,7 +19,7 @@ WEBHOOK_SECRET = settings.STRIPE_WEBHOOK_SECRET
 
 # Create your views here.
 class Transaction_View(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated,IsTenantActive]
 
     def get(self,request):
         user = request.user
@@ -80,8 +81,9 @@ class Transaction_Initialize(APIView):
             status = Transactions.PENDING
         )
 
+
         payment_intent = stripe.PaymentIntent.create(
-            amount=int(course.price * 100),  # convert to paise
+            amount=int(course.price * 100),  
             currency="inr",
         automatic_payment_methods={
         "enabled": True,
@@ -154,6 +156,7 @@ class StripeWebHook(APIView):
                         "self_enrolled":True
                     }
                 )
+        initialize_course_progress(transaction.user,transaction.course)
         
     def failed(self,event):
         transaction_id = event['metadata'].get('transaction_id')

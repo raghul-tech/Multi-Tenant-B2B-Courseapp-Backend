@@ -1,7 +1,8 @@
 from django.db import models
 from tenant.models import Tenant
 from accounts.models import User
-from course.models import Course_db,Module,SubModule
+from course.models import Course_db
+from django.core.validators import MinValueValidator,MaxValueValidator
 
 # Create your models here.
 class Skills(models.Model):
@@ -23,13 +24,16 @@ class CourseSkill(models.Model):
     )
     skills = models.ForeignKey(
         Skills,
-        on_delete=models.CASCADE
+        on_delete=models.CASCADE,
+        related_name="course_skills"
     )
     course = models.ForeignKey(
         Course_db,
         on_delete=models.CASCADE
     )
-    course_weight = models.PositiveIntegerField(default=0)
+    course_weight = models.PositiveIntegerField(default=0,
+          validators=[MinValueValidator(0), MaxValueValidator(100)]
+          )
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
          unique_together = ("skills","course")
@@ -49,7 +53,8 @@ class UserSkillProgress(models.Model):
              Tenant,
              on_delete=models.CASCADE
         )
-        profeciency = models.PositiveIntegerField(default = 0)
+        profeciency = models.PositiveIntegerField(default = 0,
+                      validators=[MinValueValidator(0), MaxValueValidator(100)])
         last_updated = models.DateTimeField(auto_now=True)
         class Meta:
              unique_together = ("user","skills")

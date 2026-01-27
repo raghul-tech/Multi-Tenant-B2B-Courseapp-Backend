@@ -72,3 +72,18 @@ class UserSubModuleProgress(models.Model):
         submodule_completed = models.BooleanField(default = False)
         class Meta:
                 unique_together = ("user","submodule")
+
+
+class UserProgress(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+
+    submodule_progress = models.OneToOneField(
+        UserSubModuleProgress,
+        on_delete=models.CASCADE
+    )
+
+    last_watched_duration = models.PositiveIntegerField(default=0)
+    mark_scored = models.PositiveIntegerField(default=0)
+
+    completed = models.BooleanField(default=False)
+    last_updated = models.DateTimeField(auto_now=True)
