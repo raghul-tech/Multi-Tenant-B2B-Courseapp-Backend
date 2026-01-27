@@ -25,6 +25,7 @@ class Course_db(models.Model):
     )
       title = models.CharField(max_length=255)
       description = models.TextField()    
+      image = models.URLField(null = True,blank=True)
       course_type = models.CharField(max_length=10, choices=COURSE_CHOICES, default='FREE')
       status = models.CharField(max_length=10, choices=STATUS, default='DRAFT')
       price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
@@ -60,6 +61,9 @@ class Module(models.Model):
       
 
 class SubModule(models.Model):
+     VIDEO = 'VIDEO'
+     ASSIGNMENT = "ASSIGNMENT"
+
      SUBMODULE_TYPE = [
           ('VIDEO','video'),
           ('ASSIGNMENT','assignment')
@@ -72,34 +76,17 @@ class SubModule(models.Model):
      )
      title = models.CharField(max_length=255)
      submodule_type = models.CharField(max_length=20, choices=SUBMODULE_TYPE)
-     orders = models.PositiveIntegerField()
-     video_url = models.URLField(max_length=500, null=True, blank=True)
-     assignment_description = models.TextField(null=True, blank=True)
+     order = models.PositiveIntegerField()
+     url = models.URLField(max_length=500, null=True, blank=True)
+     description = models.TextField(null=True, blank=True)
+     video_duration = models.PositiveIntegerField(default=0,null=True,blank=True)
+     assignment_mark = models.PositiveIntegerField(default=0,null=True,blank=True)
      created_at = models.DateTimeField(auto_now_add=True)
      updated_at = models.DateTimeField(auto_now=True)
 
      class Meta:
-          ordering = ['orders']
-          unique_together = ('module','orders')
+          ordering = ['order']
+          unique_together = ('module','order')
 
      def __str__(self):
           return f"{self.module.title} - {self.title}"
-     
-class VideoProgress(models.Model):
-     user = models.ForeignKey(
-          User,
-          on_delete=models.CASCADE,
-          related_name="user_videoprogress"
-     )
-     submodule = models.ForeignKey(
-          SubModule,
-          on_delete=models.CASCADE,
-          related_name="submodule_videoprogress"
-     )
-     last_duration = models.PositiveIntegerField(default=0)
-     video_duration = models.PositiveIntegerField(default=0)
-     created_at = models.DateTimeField(auto_now_add=True)
-     updated_at = models.DateTimeField(auto_now=True)
-
-     class Meta:
-          unique_together = ("user","submodule")

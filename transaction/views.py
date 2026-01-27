@@ -1,18 +1,44 @@
 from django.shortcuts import render
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated,AllowAny
 from rest_framework.response import Response
 from course.models import Course_db
-from core.permission import UserRole
+from core.permission import UserRole,IsTenantActive
 from enrollement.models import Enrollement
 from .models import Transactions
 from .serializers import TransactionSerializers
+import stripe
+from django.conf import settings
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from courseprogress.views import initialize_course_progress
 
+
+stripe.api_key = settings.STRIPE_SECRET_KEY
+WEBHOOK_SECRET = settings.STRIPE_WEBHOOK_SECRET
 
 # Create your views here.
+class Transaction_View(APIView):
+    permission_classes = [IsAuthenticated,IsTenantActive]
+
+    def get(self,request):
+        user = request.user
+        if user.role == UserRole.SUPER_ADMIN:
+            data = Transactions.objects.all()
+        elif user.role == UserRole.TENANT_ADMIN:
+            data = Transactions.objects.filter(tenant = user.tenant)
+        elif user.role == UserRole.TENANT_USER:
+            data = Transactions.objects.filter(user = user)
+        else:
+            return Response({"details":"Not Authorized"},status=400)
+    
+        serializer = TransactionSerializers(data,many=True)
+        return Response(serializer.data,status=200)
+    
 
 class Transaction_Initialize(APIView):
     permission_classes = [IsAuthenticated]
+    
     def post(self, request):
      
         user = request.user
@@ -34,6 +60,18 @@ class Transaction_Initialize(APIView):
             return Response({"details":"this is a free course"},status=400)
         if course.status != "PUBLISHED":
             return Response({"details":"course is not published "},status=400)
+        if Transactions.objects.filter(
+               user = user,
+            course = course,
+            status = Transactions.SUCCESS
+        ).exists():
+            return Response({"Course is already paid"},status=200)
+        elif Transactions.objects.filter(
+              user = user,
+            course = course,
+            status = Transactions.PENDING
+        ).exists():
+            return Response({"Transaction is in pending cant pay again"},status=200)
         
         transaction =  Transactions.objects.create(
             tenant = user.tenant,
@@ -43,78 +81,89 @@ class Transaction_Initialize(APIView):
             status = Transactions.PENDING
         )
 
+
+        payment_intent = stripe.PaymentIntent.create(
+            amount=int(course.price * 100),  
+            currency="inr",
+        automatic_payment_methods={
+        "enabled": True,
+        "allow_redirects": "never"
+    },
+            metadata={
+                "transaction_id": transaction.id,
+                "user_id": user.id,
+                "tenant_id": user.tenant.id,
+                "course_id": course.id,
+            }
+        )
+        transaction.stripe_payment_id = payment_intent.id
+        transaction.save()
+
         return Response({
           "payment_id":transaction.id,
-          "status":transaction.status
-        })
-    
-class Transaction_Verify(APIView):
-    permission_classes = [IsAuthenticated]
-    def post (self,request):
-        verify = help_transaction()
-        return verify.transaction(request)
-    
-class Transaction_Retry(APIView):
-    permission_classes = [IsAuthenticated]
-    def put(self,request):
-       retry = help_transaction()
-       return retry.transaction(request)
+          "status":transaction.status,
+          "client_secret": payment_intent.client_secret,
+          "stripe_payment_id":transaction.stripe_payment_id
+        },status=201)
 
-class Transaction_View(APIView):
-    permission_classes = [IsAuthenticated]
 
-    def get(self,request):
-        user = request.user
-        if user.role == UserRole.SUPER_ADMIN:
-            data = Transactions.objects.all()
-        elif user.role == UserRole.TENANT_ADMIN:
-            data = Transactions.objects.filter(tenant = user.tenant)
-        elif user.role == UserRole.TENANT_USER:
-            data = Transactions.objects.filter(user = user)
-        else:
-            return Response({"details":"Not Authorized"},status=400)
-    
-        serializer = TransactionSerializers(data,many=True)
-        return Response(serializer.data,status=200)
-    
-class help_transaction():
-        def transaction(self, request):
-            user = request.user
-            if user.role != UserRole.TENANT_USER:
-                return Response({"details":"tenent user can only pay"},status=403)
-            payment = request.data.get("payment_id")
-            success = request.data.get("success")
+@method_decorator(csrf_exempt, name='dispatch')
+class StripeWebHook(APIView):
+    permission_classes=[AllowAny]
+    def post(self,request):
+        payload = request.body
+        signature = request.META.get('HTTP_STRIPE_SIGNATURE')
 
-            if payment is None or success is None:
-                return Response({"details":"payment id and success status is required"},status=403)
-            try:
-                transaction = Transactions.objects.get(
-                    id = payment,
-                    user = user,
-                    tenant = user.tenant
-                )
-            except Transactions.DoesNotExist:
-                return Response({"details":"no transaction data found"},status=403)
+        try:
+            event = stripe.Webhook.construct_event(
+                payload,
+                signature,
+                WEBHOOK_SECRET
+            )
+        except stripe.error.SignatureVerificationError:
+            return Response(status=400)
+        except ValueError as e:
+             return Response({"error": str(e)}, status=400)
+
+        
+        if event['type'] == 'payment_intent.succeeded':
+            self.success(event['data']['object'])
+        elif event['type'] == 'payment_intent.payment_failed':
+            self.failed(event['data']['object'])
             
-            if transaction.status ==Transactions.SUCCESS:
-                return Response({"details":"Transaction is already complete"},status=200)
-            
-            if success:
-                transaction.status =Transactions.SUCCESS
-                transaction.payment_mode = "online"
-                transaction.save()
+        return Response(status=200)
 
-                Enrollement.objects.get_or_create(
-                    user = user,
+    def success(self,event):
+        transaction_id = event['metadata'].get('transaction_id')
+
+        try:
+           transaction =   Transactions.objects.get(id = transaction_id)
+        except Transactions.DoesNotExist:
+            return
+        if transaction.status == Transactions.SUCCESS:
+            return
+        
+        transaction.status = Transactions.SUCCESS
+        transaction.stripe_payment_id = event['id']
+        transaction.payment_mode = 'stripe'
+        transaction.save()
+        Enrollement.objects.get_or_create(
+                    user = transaction.user,
                     course = transaction.course,
-                    assigned_by = user,
+                    assigned_by = transaction.user,
                     defaults={
                         "status":Enrollement.ASSIGNED,
                         "self_enrolled":True
                     }
                 )
-                return Response({"details":"Payment is successful and the course is enrolled"},status=200)
-
-            transaction.status = Transactions.FAILED
-            transaction.save()
-            return Response({"details":"Paymemt failed "},status=403)
+        initialize_course_progress(transaction.user,transaction.course)
+        
+    def failed(self,event):
+        transaction_id = event['metadata'].get('transaction_id')
+        try:
+           transaction =   Transactions.objects.get(id = transaction_id)
+           transaction.status = Transactions.FAILED
+           transaction.save()
+        except Transactions.DoesNotExist:
+            return
+        

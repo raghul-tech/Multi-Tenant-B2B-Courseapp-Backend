@@ -1,13 +1,13 @@
 from django.shortcuts import render
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
-from core.permission import UserRole
+from core.permission import UserRole,IsTenantActive
 from courseprogress.models import UserModuleProgress
 from .serializers import moduleProgress_view_serializers
 from rest_framework.response import Response
 # Create your views here.
 class moduleProgress_View(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated,IsTenantActive]
     def get_queryset(self,user):
         if user.role == UserRole.SUPER_ADMIN:
             data = UserModuleProgress.objects.all()

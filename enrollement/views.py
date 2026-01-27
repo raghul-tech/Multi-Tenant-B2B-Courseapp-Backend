@@ -4,13 +4,14 @@ from rest_framework.permissions import IsAuthenticated
 from .serializers import EnrollementSerializer
 from rest_framework.response import Response
 from .models import Enrollement
-from core.permission import UserRole as User
+from accounts.models import User
 from course.models import Course_db
 from courseprogress.views import initialize_course_progress
+from core.permission import IsTenantActive
 
 # Create your views here.
 class Enrollement_View(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated,IsTenantActive]
 
     def get(self, request):
         user = request.user
@@ -29,24 +30,27 @@ class Enrollement_View(APIView):
     def post(self, request):
         user = request.user
         if user.role == User.SUPER_ADMIN:
-            return Response({"details":"Suoer Admin can't assign Course" }, status=400)
+            return Response({"details":"Super Admin can't assign Course" }, status=400)
         course_id = request.data.get("course")
         user_id = request.data.get("user")
+        if user.role == User.TENANT_USER:
+            user_id =  user.pk
         if not course_id or not user_id:
             return Response({"details":"course and user id is required"},status=400)
         try:
-          enrollements=    Enrollement.objects.get(
-                user = user_id,
+          enroll_user = User.objects.get(
+              id = user_id,
+              tenant = user.tenant
+          )
+       
+          course =   Course_db.objects.get(
+                id = course_id,
                 tenant = user.tenant
             )
-          course =   Course_db.objects.get(
-                course = course_id,
-               tenant = user.tenant
-            )
-        except Enrollement.DoesNotExist or Course_db.DoesNotExist:
+        except User.DoesNotExist or Course_db.DoesNotExist:
             return Response({"details":"enrollememts or course DB not found "},status = 400)
         
-        if enrollements.role in [
+        if enroll_user.role in [
             User.SUPER_ADMIN,
             User.TENANT_ADMIN
         ]:
@@ -55,14 +59,14 @@ class Enrollement_View(APIView):
                 status=400
             )
 
-        if not enrollements.is_active:
+        if not enroll_user.is_active:
             return Response(
                 {"detail": "User is not active"},
                 status=400
             )
 
         if user.role == User.TENANT_USER:
-            if enrollements.user != user:
+            if enroll_user != user:
                 return Response({"details":"Tenant User cant assign course to others"},status=400)
             if course.course_type == Course_db.PAID:
                 return Response({"details":"Tenant user should pay to access this course"},status=403)
@@ -71,14 +75,14 @@ class Enrollement_View(APIView):
             enrolled = False
 
         enroll, created = Enrollement.objects.get_or_create(
-            user = enrollements,
+            user = enroll_user,
             course = course,
             defaults={
                 "assigned_by":user,
-                "self_assigned":enrolled
+                "self_enrolled":enrolled
             }
         )
-        initialize_course_progress(enrollements,course)
+        initialize_course_progress(enroll_user,course)
  
 
         if not created:
@@ -92,7 +96,7 @@ class Enrollement_View(APIView):
         
     
 class Enrollement_Edit(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated,IsTenantActive]
 
     def put(self,request,pk):
         user = request.user

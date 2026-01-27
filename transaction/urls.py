@@ -1,10 +1,9 @@
 from django.urls import path
-from .views import Transaction_Initialize,Transaction_Verify,Transaction_View,Transaction_Retry
+from .views import Transaction_Initialize,Transaction_View,StripeWebHook
 
 
 urlpatterns =[
-    path('initialize/',Transaction_Initialize.as_view(),name = "transaction-intialize"),
-    path('verify/',Transaction_Verify.as_view(),name = "transaction-verify"),
-    path('verify/retry/',Transaction_Retry.as_view(),name = "transaction-retry"),
+    path('start/',Transaction_Initialize.as_view(),name = "transaction-intialize"),
     path('view/',Transaction_View.as_view(),name = "transaction-view"),
+    path("stripe/webhook/",StripeWebHook.as_view(),name="stripe-webhook")
 ]

@@ -12,7 +12,7 @@ class Skills_View_Serializers(serializers.ModelSerializer):
             "is_active",
             "created_at"
         ]
-        read_only_fields = fields
+        read_only_fields = [field.name for field in model._meta.fields]
 
 class Skills_Edit_Serializers(serializers.ModelSerializer):
      class Meta:

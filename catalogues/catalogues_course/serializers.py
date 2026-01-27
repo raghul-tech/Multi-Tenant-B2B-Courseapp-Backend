@@ -6,7 +6,7 @@ class Catalogues_Course_Serializers(serializers.ModelSerializer):
       model = Catalogues_Courses
       fields = [
          "id",
-         "orders",
+         "order",
          "catalogue",
          "course"
       ]
@@ -16,3 +16,4 @@ class Catalogues_Details_Serializers(serializers.ModelSerializer):
    class Meta:
       model = Catalogues_Courses
       fields = "__all__"
+

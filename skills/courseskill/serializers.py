@@ -12,7 +12,7 @@ class CourseSkill_View_Serializer(serializers.ModelSerializer):
             "course_weight",
             "created_at"
         ]
-        read_only_fields = fields
+        read_only_fields = [field.name for field in model._meta.fields]
 
 class CourseSkill_Create_Serializer(serializers.ModelSerializer):
     class Meta:

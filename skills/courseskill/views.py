@@ -1,23 +1,43 @@
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from skills.models import CourseSkill
-from core.permission import UserRole,IsTenantAdmin
+from core.permission import UserRole,IsTenantAdmin,IsTenantActive
 from rest_framework.response import Response
 from .serializers import CourseSkill_View_Serializer,CourseSkill_Create_Serializer,CourseSkill_Edit_Serializer
 
 
+
 class CourseSkill_View(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated,IsTenantActive]
     def get_queryset(self,user):
         if user.role == UserRole.SUPER_ADMIN:
             return CourseSkill.objects.all()
-        else:
+        elif user.role == UserRole.TENANT_ADMIN:
             return CourseSkill.objects.filter(tenant = user.tenant)
+        else :
+            return CourseSkill.objects.filter(course__enrollements__user = user)
         
     def get(self,request):
         data = self.get_queryset(request.user)
         serializer = CourseSkill_View_Serializer(data,many=True)
         return Response(serializer.data,status=200)
+
+
+class CourseSkill_Course(APIView):
+    permission_classes = [IsAuthenticated,IsTenantActive]
+    def get(self,request,course):
+         user = request.user
+         if user.role == UserRole.SUPER_ADMIN:
+            data = CourseSkill.objects.filter(course = course)
+         else:
+            data = CourseSkill.objects.filter(course = course,tenant = user.tenant)
+         serializer = CourseSkill_View_Serializer(data,many=True)
+         return Response(serializer.data,status=200)
+         
+         
+        
+
+
 
 class CourseSkill_Create(APIView):
     permission_classes = [IsAuthenticated,IsTenantAdmin]

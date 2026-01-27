@@ -1,14 +1,14 @@
 from django.shortcuts import render
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
-from core.permission import UserRole,IsTenantAdmin
+from core.permission import UserRole,IsTenantAdmin,IsTenantActive
 from .models import Skills
 from rest_framework.response import Response
 from .serializers import Skills_View_Serializers,Skills_Create_Serializers,Skills_Edit_Serializers
 
 # Create your views here.
 class Skills_View(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated,IsTenantActive]
     def get_queryset(self,user):
         if user.role == UserRole.SUPER_ADMIN:
             return Skills.objects.all()

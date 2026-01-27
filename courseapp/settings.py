@@ -12,6 +12,10 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 from datetime import timedelta
+import environ
+
+env = environ.Env()
+environ.Env.read_env()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -26,13 +30,18 @@ SECRET_KEY = 'django-insecure-vij00yv=3wldmhg*mhs=k0k4lw0r!)+505x5(e=2f6+eig&y&g
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    '127.0.0.1',
+    'localhost',
+    'deloras-nondelusive-phillip.ngrok-free.dev',
+]
+
 
 
 
 SIMPLE_JWT = {
     # Access token valid for 10 minutes
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=10),
+    "ACCESS_TOKEN_LIFETIME": timedelta(days=10),
 
     # Refresh token (usually longer)
     "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
@@ -163,3 +172,8 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+
+
+STRIPE_SECRET_KEY=env('STRIPE_SECRET_KEY')
+STRIPE_PUBLIC_KEY=env('STRIPE_PUBLIC_KEY')
+STRIPE_WEBHOOK_SECRET=env('STRIPE_WEBHOOK_SECRET')
