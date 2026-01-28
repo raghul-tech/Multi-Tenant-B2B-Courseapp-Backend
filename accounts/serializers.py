@@ -6,14 +6,15 @@ from django.contrib.auth.models import update_last_login
 from django.core.validators import validate_email
 
 
-class UserSerializerView(serializers.ModelSerializer):
+class UserViewSerializer(serializers.ModelSerializer):
      class Meta:
           model = User
           fields = ['id', 'email', 'password', 'role', 'tenant', 'is_active', 'is_staff']
 
 class UserSerializer(serializers.ModelSerializer):  
+    password = serializers.CharField(write_only=True)
     class Meta:
-        password = serializers.CharField(write_only=True)
+       
         model = User
         fields = ['id', 'email', 'password', 'role', 'tenant', 'is_active', 'is_staff']
         
@@ -34,8 +35,17 @@ class UserSerializer(serializers.ModelSerializer):
                 
                 instance.save()
                 return instance
+
+class UserAdminSerializer(serializers.Serializer):
+      class Meta:
+            password = serializers.CharField(write_only=True)
+            model = User
+            fields = ['id', 'email', 'password', 'role', 'tenant', 'is_active', 'is_staff']    
+
+      def create(self, validated_data):
+            return User_Create(self,validated_data)
             
-    
+     
     
 class UserEditSerializer(serializers.ModelSerializer):
      class Meta:

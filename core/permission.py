@@ -17,7 +17,14 @@ class IsTenantUser(BasePermission):
 class IsTenantActive(BasePermission):
     def has_permission(self, request, view):
         return  request.user.is_authenticated and request.user.role == UserRole.SUPER_ADMIN or request.user.tenant.is_active 
+    
+class IsTenantAdminOrUser(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and ( request.user.role == UserRole.TENANT_ADMIN or request.user.role == UserRole.TENANT_USER )and request.user.tenant.is_active
 
+class IsSuperAdminOrTenantAdmin(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated  and( request.user.role == UserRole.SUPER_ADMIN or (request.user.tenant.is_active and request.user.role == UserRole.TENANT_ADMIN))
 
 class UserRole():
     SUPER_ADMIN = "SUPER_ADMIN"

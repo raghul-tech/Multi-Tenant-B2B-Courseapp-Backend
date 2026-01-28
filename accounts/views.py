@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from .models import User
 from tenant.models import Tenant
-from .serializers import UserSerializer, EmailTokenSerializer, UserEditSerializer,UserSerializerView
+from .serializers import UserSerializer, EmailTokenSerializer, UserEditSerializer,UserViewSerializer,UserAdminSerializer
 from rest_framework.permissions import IsAuthenticated
 from core.permission import IsSuperAdmin,IsTenantAdmin,IsTenantActive
 from rest_framework_simplejwt.views import TokenObtainPairView 
@@ -48,27 +48,29 @@ class account_delete_superuser(APIView):
 
 
 class accounts_create_admin(APIView):
-       permission_classes = [IsAuthenticated,IsSuperAdmin]
+       permission_classes = [IsAuthenticated,IsSuperAdmin] 
 
        def post(self,request):
         tenant_id = request.data.get("tenant")
+        email = request.data.get('email')
         if not tenant_id:
                return Response({"details":"tenant is required"},status=403)
+        if not email:
+               return Response({"details":"Email is required"},status=400)
         try:
          tenant  = Tenant.objects.get(id = tenant_id)
         except Tenant.DoesNotExist:
-               return Response({"Tenant not found"},status=403)
-               
+               return Response({"Tenant not found"},status=403)      
         if not tenant.is_active:
           return Response({"detail": "Tenant is not active."}, status=403)
         
-        if not validate_email(request.data.get('email')):
+        if not validate_email(email):
                   return Response({"email is not valid"},status=403)
         
-        if User.objects.filter(email = request.data.get('email')).exists():
+        if User.objects.filter(email = email).exists():
                   return Response({"Email already exist"},status=403)
 
-        serializer = UserSerializer(data=request.data)
+        serializer = UserAdminSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save(
                    tenant = tenant,
@@ -112,7 +114,7 @@ class accounts_detail(APIView):
                     data = User.objects.filter(id=user.id)
             else:
                     return Response({"detail": "You do not have permission to view this content."}, status=403)
-            serializer = UserSerializerView(data, many=True)
+            serializer = UserViewSerializer(data, many=True)
             return Response(serializer.data)
        
 
