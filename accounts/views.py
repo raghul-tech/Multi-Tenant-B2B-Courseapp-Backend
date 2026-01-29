@@ -2,14 +2,15 @@ from django.shortcuts import render
 from django.http import HttpResponse
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
 from .models import User
-from tenant.models import Tenant
-from .serializers import UserSerializer, EmailTokenSerializer, UserEditSerializer,UserViewSerializer,UserAdminSerializer
+from .serializers import UserSerializerView, EmailTokenSerializer,UserSerializerCreate,UserAdminSerializerCreate,UserEditSerializer
 from rest_framework.permissions import IsAuthenticated
-from core.permission import IsSuperAdmin,IsTenantAdmin,IsTenantActive
+from core.permission import IsSuperAdmin,IsTenantAdmin,IsSuperAdminOrTenantAdmin,IsTenantAdminOrUser
 from rest_framework_simplejwt.views import TokenObtainPairView 
 from validate_email_address import validate_email
+from rest_framework.viewsets import ModelViewSet
+from rest_framework.generics import RetrieveAPIView,GenericAPIView,get_object_or_404
+from tenant.models import Tenant
  
 
 # Create your views here.
@@ -21,7 +22,6 @@ class account_create_superuser(APIView):
 
             if not validate_email(email):
                   return Response({"email is not valid"},status=403)
-
             if not email or not passwd:
                   return Response({"details":"email and password is required"},status=403)
             if User.objects.filter(email = email).exists():
@@ -31,132 +31,77 @@ class account_create_superuser(APIView):
                   password = passwd
              )
 
-            serializer = UserSerializer(super_user)
+            serializer = UserSerializerView(super_user)
             return Response(serializer.data,status=200)
 
 class account_delete_superuser(APIView):
       permission_classes = [IsAuthenticated,IsSuperAdmin]     
       def delete(self,request,pk):
             try:
-                data =   User.objects.get(pk=pk)
+                user = User.objects.get(pk=pk)
             except User.DoesNotExist:
                   return Response({"details":"data not found"},status=403)
-            if(data.role != User.SUPER_ADMIN):
-                  return Response({"details":"This is for deleting super user only "},status=403)         
-            data.delete()
+            if(user.role != User.SUPER_ADMIN):
+                  return Response({"details":"This is for deleting super user only "},status=403)      
+            if(user.pk == pk):
+                 return Response({"Super Admin cannot delete himself"})   
+            user.delete()
             return Response({"details":"Super Admin deleted successfully"},status=200)
 
 
-class accounts_create_admin(APIView):
-       permission_classes = [IsAuthenticated,IsSuperAdmin] 
+class AccountAdminView(ModelViewSet):
+    permission_classes = [IsAuthenticated,IsSuperAdminOrTenantAdmin]
+    def get_serializer_class(self):
+        if self.action  == 'create':
+            return UserAdminSerializerCreate
+        elif self.action in ['update','partial_update']:
+            return UserEditSerializer
+        return UserSerializerView
+    
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == User.TENANT_ADMIN:
+            return User.objects.filter(tenant = user.tenant,role = User.TENANT_ADMIN)
+        return User.objects.filter(role = User.TENANT_ADMIN)    
+    
+    def destroy(self, request, *args, **kwargs):
+         user = self.get_object()
+         if user.pk == request.user.pk:
+              return Response({"details":"Admin cannot delete himself"})
+         return super().destroy(request, *args, **kwargs)
+    
 
-       def post(self,request):
-        tenant_id = request.data.get("tenant")
-        email = request.data.get('email')
-        if not tenant_id:
-               return Response({"details":"tenant is required"},status=403)
-        if not email:
-               return Response({"details":"Email is required"},status=400)
-        try:
-         tenant  = Tenant.objects.get(id = tenant_id)
-        except Tenant.DoesNotExist:
-               return Response({"Tenant not found"},status=403)      
-        if not tenant.is_active:
-          return Response({"detail": "Tenant is not active."}, status=403)
-        
-        if not validate_email(email):
-                  return Response({"email is not valid"},status=403)
-        
-        if User.objects.filter(email = email).exists():
-                  return Response({"Email already exist"},status=403)
-
-        serializer = UserAdminSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save(
-                   tenant = tenant,
-            )
-            return Response(serializer.data, status=201)
-
-        return Response(serializer.errors, status=400)
-
-
-
-class accounts_create(APIView):
-    permission_classes = [IsAuthenticated,IsTenantAdmin]
-
-    def post(self, request):
-        user = request.user
-        data = request.data.copy() 
-        if not validate_email(request.data.get('email')):
-                  return Response({"email is not valid"},status=403)
-        if User.objects.filter(email = request.data.get('email')).exists():
-                  return Response({"Email already exist"},status=403)
-
-        serializer = UserSerializer(data=data)
-        if serializer.is_valid():
-            serializer.save(
-                   tenant = user.tenant
-            )
-            return Response(serializer.data, status=201)
-
-        return Response(serializer.errors, status=400)
-
-class accounts_detail(APIView):
-      permission_classes = [IsAuthenticated,IsTenantActive]
-
-      def get(self, request):     
-            user = request.user
-            if user.role == User.SUPER_ADMIN:
-                    data = User.objects.all() 
-            elif user.role == User.TENANT_ADMIN:         
-                    data = User.objects.filter(tenant=user.tenant)     
-            elif user.role == User.TENANT_USER:
-                    data = User.objects.filter(id=user.id)
-            else:
-                    return Response({"detail": "You do not have permission to view this content."}, status=403)
-            serializer = UserViewSerializer(data, many=True)
-            return Response(serializer.data)
-       
-
-class accounts_edit(APIView):
-      permission_classes = [IsAuthenticated,IsTenantActive]
-      def put(self, request,pk):
-                
-                user = request.user
-                if User.objects.filter(email = request.data.get('email')).exists():
-                  return Response({"Email already exist"},status=403)
-                try:
-                  if user.role == User.SUPER_ADMIN:
-                              user = User.objects.get(pk=pk)
-                  elif user.role == User.TENANT_ADMIN:
-                              user = User.objects.get(pk=pk, tenant=user.tenant)
-                  elif user.role == User.TENANT_USER:
-                       user = User.objects.get(pk=pk, email = user)        
-                except User.DoesNotExist:
-                              return Response({"User does not exist"},status=403)
-                serializer = UserEditSerializer(user, data=request.data, partial=True)
-                if serializer.is_valid():
-                    serializer.save()
-                    return Response(serializer.data,status=200)
-
-           
-      def delete(self, request, pk):
-           user = request.user
-           try:
-            if user.role == User.SUPER_ADMIN:
-                        user = User.objects.get(pk=pk)
-            elif user.role == User.TENANT_ADMIN:
-                        user = User.objects.get(pk=pk, tenant=user.tenant)
-            else:
-                  return Response({"detail": "You do not have permission to perform this action."}, status=403)
-           except User.DoesNotExist:
-                              return Response({"User does not exist"},status=403)
-           user.delete()
-           return Response({"details":"user deleted"},status=200)
-        
- 
-
-
+class AccountUserView(ModelViewSet):
+    permission_classes = [IsAuthenticated,IsTenantAdminOrUser]
+    def get_permissions(self):
+         if self.action in ['create','destroy']:
+              return [IsAuthenticated(),IsTenantAdmin()]     
+         return super().get_permissions()
+    
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return UserSerializerCreate
+        elif self.action in ['update','partial_update']:
+            return UserEditSerializer
+        return UserSerializerView
+    
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == User.TENANT_ADMIN:
+            return User.objects.filter(tenant = user.tenant)
+        return User.objects.filter(pk = user.pk,tenant = user.tenant)
+    
+class AccountTenantView(RetrieveAPIView,GenericAPIView):
+     permission_classes = [IsAuthenticated,IsSuperAdmin]
+     serializer_class = UserSerializerView
+    
+     def retrieve(self, request, *args, **kwargs):
+          pk = kwargs.get("pk")
+          tenant = get_object_or_404( Tenant,  pk = pk )
+          user = User.objects.filter(tenant = tenant).order_by('role')
+          serializer = self.get_serializer(user,many=True)
+          return Response(serializer.data)
+     
            
       
 class LoginView(TokenObtainPairView):

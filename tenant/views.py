@@ -5,45 +5,13 @@ from rest_framework.permissions import IsAuthenticated
 from .serializers import TenantSerializer
 from .models import Tenant
 from core.permission import  IsSuperAdmin
+from rest_framework.viewsets import ModelViewSet
 
 # Create your views here.
-class TenantDashboard(APIView):
+
+class TenantView(ModelViewSet):
     permission_classes = [IsAuthenticated,IsSuperAdmin]
+    serializer_class = TenantSerializer
 
-    def get(self, request):
-      try:
-            tenant = Tenant.objects.all()
-            serializer = TenantSerializer(tenant , many=True)
-            return Response(serializer.data,status=200)
-      except Tenant.DoesNotExist:
-            return Response({"detail": "Tenant does not exist."}, status=403)
-      
-    def post(self, request):
-        
-        serializer = TenantSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=201)
-        return Response(serializer.errors, status=400)
-    
-    def put(self, request, pk):
-        try:
-            tenant = Tenant.objects.get(pk=pk)
-        except Tenant.DoesNotExist:
-            return Response({"detail": "Tenant not found."}, status=404)
-
-        serializer = TenantSerializer(tenant, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=400)
-    
-    
-    def delete(self, request, pk):
-
-        try:
-            tenant = Tenant.objects.get(pk=pk)
-        except Tenant.DoesNotExist:
-            return Response({"detail": "Tenant not found."}, status=404)
-        tenant.delete()
-        return Response({"detail": "Tenant deleted successfully."}, status=204)
+    def get_queryset(self):
+        return Tenant.objects.all()

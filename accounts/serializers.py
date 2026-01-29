@@ -4,64 +4,11 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.models import update_last_login
 #from validate_email_address import validate_email
 from django.core.validators import validate_email
+from django.core.exceptions import ValidationError
 
 
-class UserViewSerializer(serializers.ModelSerializer):
-     class Meta:
-          model = User
-          fields = ['id', 'email', 'password', 'role', 'tenant', 'is_active', 'is_staff']
-
-class UserSerializer(serializers.ModelSerializer):  
-    password = serializers.CharField(write_only=True)
-    class Meta:
-       
-        model = User
-        fields = ['id', 'email', 'password', 'role', 'tenant', 'is_active', 'is_staff']
-        
-    def create(self, validated_data):
-        password = validated_data.pop('password')
-        user = User(**validated_data)
-        user.set_password(password)
-        user.save()
-        return user
-    
-    def update(self,instance,validated_data):
-                password = validated_data.pop('password')
-                for attr ,value in validated_data.items():
-                     setattr(instance,attr,value)
-
-                if password:
-                     instance.set_password(password)
-                
-                instance.save()
-                return instance
-
-class UserAdminSerializer(serializers.Serializer):
-      class Meta:
-            password = serializers.CharField(write_only=True)
-            model = User
-            fields = ['id', 'email', 'password', 'role', 'tenant', 'is_active', 'is_staff']    
-
-      def create(self, validated_data):
-            return User_Create(self,validated_data)
-            
-     
-    
-class UserEditSerializer(serializers.ModelSerializer):
-     class Meta:
-          password = serializers.CharField(write_only=True)
-          model = User
-          fields = [
-               "email",
-               "password",
-               "is_active",
-               "is_staff"
-          ]
-    # def update(self,instance,validated_data):
-        #        return User_Update(self,instance,validated_data)
 
             
-
 class EmailTokenSerializer(TokenObtainPairSerializer): 
     username_field =  User.USERNAME_FIELD
     def validate(self, attrs):  
@@ -73,22 +20,110 @@ class EmailTokenSerializer(TokenObtainPairSerializer):
         update_last_login(None, self.user)
         return data
     
+class UserSerializerView(serializers.ModelSerializer):
+     class Meta:
+          model = User
+          fields = ['id', 'email', 'password', 'role', 'tenant', 'is_active', 'is_staff']
 
 
-def User_Create(self,validated_data):
-        password = validated_data.pop('password')
-        user = User(**validated_data)
-        user.set_password(password)
-        user.save()
-        return user
+class UserSerializerCreate(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True)
+    class Meta:
+         model = User
+         fields = ['id', 'email', 'password', 'is_active', 'is_staff']
+        
+    def validate(self, attrs):
+               email = attrs.get('email')
+               try:
+                    validate_email(email)
+               except ValidationError:
+                    raise serializers.ValidationError("Email is not valid")
+               
+               if User.objects.filter(email = email).exists():
+                    raise serializers.ValidationError("Email is already exists")
+               return attrs
+              
+    
+    def create(self, validated_data):
+         password = validated_data.pop('password')
+         validated_data['role'] = User.TENANT_USER
+         user = User(**validated_data)
+         user.set_password(password)
+         user.save()
+         return user
+           
 
-def User_Update(self,instance,validated_data):
-                password = validated_data.pop('password')
-                for attr ,value in validated_data.items():
-                     setattr(instance,attr,value)
+          
+class UserAdminSerializerCreate(serializers.ModelSerializer):
+      password = serializers.CharField(write_only=True)
+      class Meta:
+            model = User
+            fields = ['id', 'email', 'password', 'tenant', 'is_active', 'is_staff']    
+            read_only_fields = ['id']
 
-                if password:
-                     instance.set_password(password)
+      def validate(self, attrs):
+            request = self.context['request']
+            user = request.user
+            tenant = attrs.get('tenant')
+            email = attrs.get('email')
+            try:
+              validate_email(email)
+            except ValidationError:
+                  raise serializers.ValidationError("Email is not valid")
+            if User.objects.filter(email = email).exists():
+                  raise serializers.ValidationError("Email is already exists")
+            
+            if user.role == User.SUPER_ADMIN and not tenant:
+                  raise serializers.ValidationError("super admin should give tenant")
+            if user.role == User.TENANT_ADMIN and tenant:
+                  raise serializers.ValidationError("tenant admin cannot give tenant")
+            if tenant and not tenant.is_active:
+                  raise serializers.ValidationError("tenant is not active")
+            
+            return attrs
+      
+      def create(self, validated_data):
+            password = validated_data.pop('password')
+            request = self.context['request']
+            user = request.user
+            if user.role == User.TENANT_ADMIN:
+                  validated_data['tenant'] = user.tenant
+            validated_data['role'] = User.TENANT_ADMIN
+            user = User(**validated_data)
+            user.set_password(password)
+            user.save()
+            return user
+      
+
+class UserEditSerializer(serializers.ModelSerializer):
+      password = serializers.CharField(write_only=True,required=False)
+      class Meta:
+            model = User
+            fields = [
+                  'email',
+                  'password',
+                  "is_active",
+                  "is_staff",
+            ]
+
+      def validate(self, attrs):
+            email = attrs.get('email')
+            if email:
+                try:
+                    validate_email(email)
+                except ValidationError:
+                        raise serializers.ValidationError("Email is not valid")
+            if User.objects.filter(email = email).exists():
+                  raise serializers.ValidationError("Email is already exists")
                 
-                instance.save()
-                return instance
+            return attrs
+      
+      def update(self, instance, validated_data):
+            password = validated_data.pop('password',None)
+            for attrs,value in validated_data.items():
+                  setattr(instance,attrs,value)
+            if password:
+                  instance.set_password(password)
+            instance.save()
+            return instance
+     
